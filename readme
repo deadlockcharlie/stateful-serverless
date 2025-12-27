@@ -1,0 +1,176 @@
+# Fission MapReduce Word Count with Yjs CRDT
+
+A serverless MapReduce implementation using **Yjs CRDT (Conflict-free Replicated Data Type)** for distributed word counting with automatic conflict resolution.
+
+## Why Yjs CRDT?
+
+**CRDTs** provide:
+- **Conflict-free merging**: Multiple mappers can run independently without coordination
+- **Eventually consistent**: All replicas converge to the same state
+- **Commutative & Associative**: Order of operations doesn't matter
+- **Partition tolerance**: Works even with network splits
+
+Perfect for distributed MapReduce where mappers run in parallel!
+
+## Architecture
+
+1. **Map**: Each mapper creates its own Yjs document and Y.Map CRDT
+2. **Shuffle**: Yjs automatically merges all CRDT states (conflict-free!)
+3. **Reduce**: Final output with persistent Yjs state for future merges
+
+## Setup
+
+### 1. Create Function Directory
+
+```bash
+mkdir wordcount-yjs
+cd wordcount-yjs
+```
+
+### 2. Add Files
+
+Place these files in `wordcount-yjs/`:
+- `package.json`
+- `map-yjs.js`
+- `shuffle-yjs.js`
+- `reduce-yjs.js`
+
+### 3. Create Source Package
+
+```bash
+zip -r wordcount-yjs.zip package.json map-yjs.js shuffle-yjs.js reduce-yjs.js
+```
+
+### 4. Deploy to Fission
+
+```bash
+# Create Node.js environment
+fission env create --name nodejs \
+  --image fission/node-env:latest \
+  --builder fission/node-builder:latest
+
+# Deploy functions
+fission fn create --name wordcount-map-yjs \
+  --env nodejs --src wordcount-yjs.zip \
+  --entrypoint map-yjs
+
+fission fn create --name wordcount-shuffle-yjs \
+  --env nodejs --src wordcount-yjs.zip \
+  --entrypoint shuffle-yjs
+
+fission fn create --name wordcount-reduce-yjs \
+  --env nodejs --src wordcount-yjs.zip \
+  --entrypoint reduce-yjs
+
+# Create routes
+fission route create --method POST \
+  --url /wordcount-yjs/map --function wordcount-map-yjs
+
+fission route create --method POST \
+  --url /wordcount-yjs/shuffle --function wordcount-shuffle-yjs
+
+fission route create --method POST \
+  --url /wordcount-yjs/reduce --function wordcount-reduce-yjs
+```
+
+## Usage
+
+```bash
+# Set router endpoint
+export FISSION_ROUTER=http://localhost:9090
+
+# Run word count
+python orchestrator-yjs.py sample.txt
+
+# Use multiple mappers for parallelism
+python orchestrator-yjs.py sample.txt 5
+```
+
+## CRDT Benefits in Action
+
+### Scenario 1: Concurrent Updates
+```
+Mapper 1: {"hello": 2, "world": 1}
+Mapper 2: {"hello": 1, "fission": 2}
+
+Yjs CRDT merge → {"hello": 3, "world": 1, "fission": 2} ✓
+```
+
+### Scenario 2: Order Independence
+```
+Merge(A, B) = Merge(B, A)  // Commutative
+Merge(Merge(A, B), C) = Merge(A, Merge(B, C))  // Associative
+```
+
+### Scenario 3: State Persistence
+The Yjs state can be saved and merged with future word counts:
+
+```javascript
+// Load previous state
+const prevState = loadYjsState('previous_wordcount.json');
+
+// Merge with new counts
+Y.applyUpdate(ydoc, prevState);
+// Add new words...
+// Result: Combined word counts across multiple runs!
+```
+
+## Output
+
+The orchestrator produces:
+- Word count results (sorted by frequency)
+- **Yjs CRDT state** (binary encoded, saved as JSON array)
+- CRDT metadata (type, concurrent-safe, eventually consistent)
+
+Files created:
+- `wordcount_results_yjs.json` - Full results with Yjs state
+- `wordcount_yjs_state.json` - Pure Yjs state for merging
+
+## Testing
+
+```bash
+# Test map function
+curl -X POST $FISSION_ROUTER/wordcount-yjs/map \
+  -H "Content-Type: application/json" \
+  -d '{"text":"hello world hello"}'
+
+# Response includes yjs_state array
+```
+
+## Advanced: Merging Multiple Runs
+
+```python
+# Run 1
+python orchestrator-yjs.py document1.txt
+
+# Run 2 
+python orchestrator-yjs.py document2.txt
+
+# Merge states (implement custom merger)
+# The Yjs states can be combined for aggregate word counts!
+```
+
+## Comparison: Python vs Yjs Implementation
+
+| Feature | Python | Yjs CRDT |
+|---------|--------|----------|
+| Conflict Resolution | Manual | Automatic |
+| Merge Complexity | O(n) custom logic | O(1) built-in |
+| Concurrent Safety | Requires locks | Lock-free |
+| State Persistence | Manual serialization | Native binary encoding |
+| Future Extensibility | Limited | Can merge across time |
+
+## Cleanup
+
+```bash
+fission fn delete --name wordcount-map-yjs
+fission fn delete --name wordcount-shuffle-yjs
+fission fn delete --name wordcount-reduce-yjs
+fission route delete --name <route-names>
+```
+
+## Learn More
+
+- [Yjs Documentation](https://docs.yjs.dev/)
+- [CRDT Theory](https://crdt.tech/)
+- [Fission Node.js Environment](https://fission.io/docs/languages/nodejs/)

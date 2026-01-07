@@ -1,0 +1,42 @@
+{
+  "final_state": {
+    "session_id": "wordcount-427f5758",
+    "word_counts": {
+      "words": 1,
+      "i": 1,
+      "am": 1,
+      "writing": 1,
+      "something": 1
+    },
+    "word_count_results": [
+      [
+        "am",
+        1
+      ],
+      [
+        "i",
+        1
+      ],
+      [
+        "something",
+        1
+      ],
+      [
+        "words",
+        1
+      ],
+      [
+        "writing",
+        1
+      ]
+    ],
+    "total_words": 5,
+    "unique_words": 5,
+    "updates_received": 1,
+    "session_age_seconds": 0
+  },
+  "execution_stats": {
+    "num_chunks": 3,
+    "parallel_workers": 3
+  }
+}

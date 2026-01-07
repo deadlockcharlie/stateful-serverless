@@ -1,7 +1,0 @@
-{
-  "name": "fission-wordcount-yjs",
-  "version": "1.0.0",
-  "dependencies": {
-    "yjs": "^13.6.10"
-  }
-}

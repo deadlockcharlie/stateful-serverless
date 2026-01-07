@@ -1,9 +1,24 @@
-// Stateful Yjs CRDT state manager
-// This function maintains state across multiple MapReduce operations
-// Uses in-memory storage (or can be backed by Redis/database)
+// Stateful Yjs CRDT state manager with atomic counter operations
+// Uses Y.Counter for word counts - fully concurrent, conflict-free
+
+const Y = require('yjs');
 
 // In-memory state store (persists as long as pod is alive)
 const sessions = new Map();
+
+// Initialize a new Yjs document for a session
+function createSession() {
+    const ydoc = new Y.Doc();
+    const ywordCounts = ydoc.getPNCounter('word_counts');
+    
+    return {
+        ydoc,
+        ywordCounts,
+        updates: [],
+        created: Date.now(),
+        lastAccess: Date.now()
+    };
+}
 
 module.exports = async function(context) {
     const body = context.request.body;
@@ -12,12 +27,7 @@ module.exports = async function(context) {
     
     // Initialize session if doesn't exist
     if (!sessions.has(sessionId)) {
-        sessions.set(sessionId, {
-            wordCounts: {},
-            updates: [],
-            created: Date.now(),
-            lastAccess: Date.now()
-        });
+        sessions.set(sessionId, createSession());
     }
     
     const session = sessions.get(sessionId);
@@ -25,9 +35,8 @@ module.exports = async function(context) {
     
     switch(operation) {
         case 'init':
-            // Initialize or reset session
-            session.wordCounts = {};
-            session.updates = [];
+            // Initialize or reset session with fresh Yjs document
+            sessions.set(sessionId, createSession());
             return {
                 status: 200,
                 body: {
@@ -40,13 +49,10 @@ module.exports = async function(context) {
             // Get existing session or create new one (doesn't reset if exists)
             const isNew = !sessions.has(sessionId);
             if (isNew) {
-                sessions.set(sessionId, {
-                    wordCounts: {},
-                    updates: [],
-                    created: Date.now(),
-                    lastAccess: Date.now()
-                });
+                sessions.set(sessionId, createSession());
             }
+            
+            const currentSession = sessions.get(sessionId);
             
             return {
                 status: 200,
@@ -54,20 +60,31 @@ module.exports = async function(context) {
                     message: isNew ? 'Session created' : 'Session exists',
                     session_id: sessionId,
                     is_new: isNew,
-                    unique_words: Object.keys(sessions.get(sessionId).wordCounts).length,
-                    updates_count: sessions.get(sessionId).updates.length
+                    unique_words: currentSession.ywordCounts.size,
+                    updates_count: currentSession.updates.length
                 }
             };
             
         case 'update':
-            // Receive updates from mappers/reducers (CRDT merge)
             const newCounts = body.word_counts || {};
             const nodeId = body.node_id || 'unknown';
             const timestamp = body.timestamp || Date.now();
             
-            // CRDT merge: commutative addition
-            Object.entries(newCounts).forEach(([word, count]) => {
-                session.wordCounts[word] = (session.wordCounts[word] || 0) + count;
+            console.log(`[State Manager] Received update from ${nodeId}: ${Object.keys(newCounts).length} words`);
+            
+            // Atomic updates using Yjs transactions
+            session.ydoc.transact(() => {
+                Object.entries(newCounts).forEach(([word, count]) => {
+                    // Get or create counter for this word (atomic)
+                    if (!session.ywordCounts.has(word)) {
+                        const counter = 0;
+                        session.ywordCounts.set(word, counter);
+                    }
+                    
+                    const counter = session.ywordCounts.get(word);
+                    // Atomic increment - no race conditions
+                    session.ywordCounts.set(word, counter + count);
+                });
             });
             
             // Track update history
@@ -77,29 +94,38 @@ module.exports = async function(context) {
                 wordCount: Object.keys(newCounts).length
             });
             
+            const totalUniqueWords = session.ywordCounts.size;
+            
+            console.log(`[State Manager] Total unique words now: ${totalUniqueWords}`);
+            
             return {
                 status: 200,
                 body: {
                     message: 'State updated',
                     session_id: sessionId,
-                    current_unique_words: Object.keys(session.wordCounts).length,
+                    current_unique_words: totalUniqueWords,
                     total_updates: session.updates.length
                 }
             };
             
         case 'get':
-            // Retrieve current state
-            const sorted = Object.entries(session.wordCounts)
+            // Retrieve current state from Yjs map
+            const wordCounts = {};
+            session.ywordCounts.forEach((counter, word) => {
+                wordCounts[word] = counter; // counter is already a number
+            });
+            
+            const sorted = Object.entries(wordCounts)
                 .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
             
-            const total = Object.values(session.wordCounts)
+            const total = Object.values(wordCounts)
                 .reduce((sum, c) => sum + c, 0);
-            
+            console.log(`final words: ${JSON.stringify(sorted)}`); // Debugging line
             return {
                 status: 200,
                 body: {
                     session_id: sessionId,
-                    word_counts: session.wordCounts,
+                    word_counts: wordCounts,
                     word_count_results: sorted,
                     total_words: total,
                     unique_words: sorted.length,
@@ -119,8 +145,18 @@ module.exports = async function(context) {
             }
             
             const otherSession = sessions.get(otherSessionId);
-            Object.entries(otherSession.wordCounts).forEach(([word, count]) => {
-                session.wordCounts[word] = (session.wordCounts[word] || 0) + count;
+            
+            // Merge word counts atomically
+            session.ydoc.transact(() => {
+                otherSession.ywordCounts.forEach((counter, word) => {
+                    if (!session.ywordCounts.has(word)) {
+                        const newCounter = 0;
+                        session.ywordCounts.set(word, newCounter);
+                    }
+                    
+                    const mergeCounter = session.ywordCounts.get(word);
+                    session.ywordCounts.set(word, mergeCounter + counter.count);
+                });
             });
             
             return {
@@ -128,7 +164,7 @@ module.exports = async function(context) {
                 body: {
                     message: 'Sessions merged',
                     session_id: sessionId,
-                    unique_words: Object.keys(session.wordCounts).length
+                    unique_words: session.ywordCounts.size
                 }
             };
             
@@ -160,7 +196,7 @@ module.exports = async function(context) {
             sessions.forEach((sess, id) => {
                 sessionList.push({
                     session_id: id,
-                    unique_words: Object.keys(sess.wordCounts).length,
+                    unique_words: sess.ywordCounts.size,
                     updates: sess.updates.length,
                     age_seconds: Math.floor((Date.now() - sess.created) / 1000)
                 });

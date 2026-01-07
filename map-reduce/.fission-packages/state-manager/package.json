@@ -1,0 +1,8 @@
+{
+  "name": "state-manager",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "yjs": "^13.6.10"
+  }
+}

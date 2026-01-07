@@ -2,21 +2,30 @@
 
 echo "Deploying stateful MapReduce with persistent state manager..."
 
-# Ensure Node.js environment exists
+# Package functions with dependencies
+echo ""
+echo "Packaging functions with dependencies..."
+chmod +x package-functions.sh
+./package-functions.sh
+
+# Create with newer Node image
 fission env create --name nodejs-runtime \
-  --image fission/node-env:latest \
-  --poolsize 3 || echo "✓ Environment exists"
+  --image fission/node-env-16:latest \
+  --builder fission/node-builder-16:latest \
+  --poolsize 3
 
 sleep 2
 
-# Deploy state manager function
+# Deploy state manager function with Yjs
 echo ""
-echo "1. Deploying state-manager (persistent CRDT store)..."
+echo "1. Deploying state-manager (persistent CRDT store with Yjs)..."
 fission fn create --name state-manager \
   --env nodejs-runtime \
-  --code state-manager.js || \
+  --deploy .fission-packages/state-manager.zip \
+  --entrypoint index || \
 fission fn update --name state-manager \
-  --code state-manager.js
+  --deploy .fission-packages/state-manager.zip \
+  --entrypoint index
 
 fission route create --method POST \
   --url /state-manager \
@@ -24,16 +33,18 @@ fission route create --method POST \
 
 # Deploy stateful map function
 echo ""
-echo "2. Deploying wordcount-stateful-map..."
-fission fn create --name wordcount-stateful-map \
+echo "2. Deploying wordcount-map..."
+fission fn create --name wordcount-map \
   --env nodejs-runtime \
-  --code map.js || \
-fission fn update --name wordcount-stateful-map \
-  --code map.js
+  --deploy .fission-packages/map.zip \
+  --entrypoint index || \
+fission fn update --name wordcount-map \
+  --deploy .fission-packages/map.zip \
+  --entrypoint index
 
 fission route create --method POST \
-  --url /wordcount-stateful/map \
-  --function wordcount-stateful-map 2>/dev/null || echo "  ✓ Route exists"
+  --url /wordcount/map \
+  --function wordcount-map 2>/dev/null || echo "  ✓ Route exists"
 
 echo ""
 echo "✅ Deployment complete!"

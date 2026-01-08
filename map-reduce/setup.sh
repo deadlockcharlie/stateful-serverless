@@ -22,11 +22,14 @@ echo "1. Deploying state-manager (persistent CRDT store with Yjs)..."
 fission fn create --name state-manager \
   --env nodejs-runtime \
   --deploy .fission-packages/state-manager.zip \
-  --entrypoint index || \
-fission fn update --name state-manager \
-  --deploy .fission-packages/state-manager.zip \
-  --entrypoint index
-
+  --entrypoint index \
+  --executortype newdeploy \
+  --minscale 1 \
+  --maxscale 1
+# Seems uncessesary
+#fission fn update --name state-manager \ 
+#  --deploy .fission-packages/state-manager.zip \
+#  --entrypoint index\
 fission route create --method POST \
   --url /state-manager \
   --function state-manager 2>/dev/null || echo "  ✓ Route exists"

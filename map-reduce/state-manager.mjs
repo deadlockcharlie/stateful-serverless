@@ -149,8 +149,7 @@ export default async function(context) {
             session.ydoc.transact(() => {
                 otherSession.ywordCounts.forEach((otherCounter, word) => {
                     if (!session.ywordCounts.has(word)) {
-                        const counter = new PNCounter();
-                        session.ywordCounts.set(word, counter);
+                        session.ywordCounts.set(word, otherCounter);
                     }
                     
                     const currentCounter = session.ywordCounts.get(word);

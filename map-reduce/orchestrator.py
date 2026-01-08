@@ -276,7 +276,7 @@ def main():
         print(f"\n Pipeline failed: {e}")
         print(f"\nMake sure all functions are deployed:")
         print(f"  - state-manager")
-        print(f"  - wordcount-stateful/map")
+        print(f"  - wordcount-map")
         sys.exit(1)
 
 if __name__ == "__main__":

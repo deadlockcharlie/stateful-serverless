@@ -1,2 +1,4 @@
 node_modules/
 .fission-packages/
+package-lock.json
+wordcount_parallel_results.json

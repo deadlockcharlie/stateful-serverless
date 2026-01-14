@@ -1,0 +1,5 @@
+./map-reduce/node_modules/
+./map-reduce/.fission-packages/
+./map-reduce/package-lock.json
+wordcount_parallel_results.js
+./autogen

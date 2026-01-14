@@ -1,5 +1,22 @@
-./map-reduce/node_modules/
-./map-reduce/.fission-packages/
-./map-reduce/package-lock.json
-wordcount_parallel_results.js
-./autogen
+# Dependencies
+node_modules/
+.fission-packages/
+package-lock.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Results/Output files
+*_results.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Autogen
+autogen/

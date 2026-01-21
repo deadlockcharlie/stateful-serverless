@@ -11,6 +11,8 @@ __pycache__/
 
 # Results/Output files
 *_results.json
+*Results.json
+*.png
 
 # IDE
 .vscode/

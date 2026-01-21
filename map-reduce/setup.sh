@@ -12,7 +12,7 @@ chmod +x package-functions.sh
 fission env create --name nodejs-runtime \
   --image fission/node-env-16:latest \
   --builder fission/node-builder-16:latest \
-  --poolsize 3
+  --poolsize 100
 
 sleep 2
 
@@ -73,4 +73,4 @@ echo "    -H 'Content-Type: application/json' \\"
 echo "    -d '{\"operation\": \"list\"}'"
 echo ""
 echo "  # Run word count"
-echo "  python orchestrator.py sample.txt 3"
+echo "  python orchestrator.py sample.txt"

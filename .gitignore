@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+.fission-packages/
+package-lock.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.coding/
+
+# Results/Output files
+*_results.json
+*Results.json
+*.png
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

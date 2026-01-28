@@ -2,6 +2,7 @@
 
 import * as Y from "./node_modules/yjs/src/index.js";
 import { YPNCounter as PNCounter } from "./node_modules/yjs/src/types/YPNCounter.js";
+import { WebsocketProvider } from "y-websocket";
 
 // In-memory state store (persists as long as pod is alive)
 const sessions = new Map();
@@ -10,10 +11,16 @@ const sessions = new Map();
 function createSession() {
     const ydoc = new Y.Doc();
     const ywordCounts = ydoc.getMap('word_counts');
-    
+    const provider = new WebsocketProvider(
+        "ws://localhost:1234", 
+        "my-room",             
+        ydoc
+    )
+
     return {
         ydoc,
         ywordCounts,
+        provider,
         updates: [],
         created: Date.now(),
         lastAccess: Date.now()
@@ -22,6 +29,7 @@ function createSession() {
 
 export default async function(context) {
     const body = context.request.body;
+    const provider = body.provider;
     const operation = body.operation; // 'init', 'update', 'get', 'merge', 'reset'
     const sessionId = body.session_id || 'default';
     
@@ -31,6 +39,7 @@ export default async function(context) {
     }
     
     const session = sessions.get(sessionId);
+    const provder = sessions.get(provider);
     session.lastAccess = Date.now();
     
     switch(operation) {

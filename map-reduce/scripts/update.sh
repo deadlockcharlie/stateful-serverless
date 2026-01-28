@@ -11,17 +11,15 @@ echo "Packaging functions..."
 echo ""
 echo "Updating state-manager function..."
 fission fn update --name state-manager \
-  --deploy ../fission-packages/state-manager.zip \
+  --deploy ../.fission-packages/state-manager.zip \
   --entrypoint index \
   --executortype newdeploy\
-  --minscale 1 \
-  --maxscale 1
 
 # Update wordcount-map
 echo ""
 echo "Updating wordcount-map function..."
 fission fn update --name wordcount-map \
-  --deploy ../fission-packages/map.zip \
+  --deploy ../.fission-packages/map.zip \
   --entrypoint index
 
 echo ""

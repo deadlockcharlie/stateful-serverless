@@ -25,35 +25,25 @@ def make_request(url, data, timeout=60):
     with urllib.request.urlopen(req, timeout=timeout) as response:
         return json.loads(response.read().decode('utf-8'))
 
-def init_session(session_id, reuse=False):
-    """Initialize a new session or reuse existing one"""
-    print(f"\n{'='*60}")
-    print(f"{'REUSING' if reuse else 'INITIALIZING'} SESSION: {session_id}")
-    print(f"{'='*60}")
+def get_state():
+    """Get current state from state manager"""
+    return make_request(
+        f"{FISSION_ROUTER}/state-manager",
+        {"operation": "get"}
+    )
+    
+def reset():
+    operation = 'reset'
     
     result = make_request(
         f"{FISSION_ROUTER}/state-manager",
         {
-            "operation": 'get_or_create' if reuse else 'init',
-            "session_id": session_id
+            "operation": operation,
         }
     )
-    
-    if reuse and result.get('is_new') == False:
-        print(f"  Reusing existing session (words: {result.get('unique_words', 0)}, updates: {result.get('updates_count', 0)})")
-    else:
-        print(f"  New session created")
-    
     return result
 
-def get_state(session_id):
-    """Get current state from state manager"""
-    return make_request(
-        f"{FISSION_ROUTER}/state-manager",
-        {"operation": "get", "session_id": session_id}
-    )
-
-def process_word(word_id, word, session_id):
+def process_word(word_id, word):
     """Process a single word - called in parallel"""
     start_time = time.time()
     
@@ -61,7 +51,6 @@ def process_word(word_id, word, session_id):
         f"{FISSION_ROUTER}/wordcount/map",
         {
             "text": word,
-            "session_id": session_id,
             "state_manager_url": "http://router.fission/state-manager"
         }
     )
@@ -73,7 +62,7 @@ def process_word(word_id, word, session_id):
         'elapsed': time.time() - start_time
     }
 
-def process_words_parallel(words, session_id):
+def process_words_parallel(words):
     """Process all words in parallel"""
     print(f"\n{'='*60}")
     print(f"PROCESSING {len(words)} WORDS IN PARALLEL")
@@ -84,7 +73,7 @@ def process_words_parallel(words, session_id):
     
     with ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(process_word, i, word, session_id): i
+            executor.submit(process_word, i, word): i
             for i, word in enumerate(words)
         }
         
@@ -104,30 +93,25 @@ def process_words_parallel(words, session_id):
     
     return results
 
-def get_final_results(session_id):
+def get_final_results():
     """Get final results from state manager"""
-    return get_state(session_id)
+    return get_state()
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python orchestrator.py <input_file> [--session ID] [--reuse]")
+        print("Usage: python orchestrator.py <input_file> [--reuse]")
         print("   or: python orchestrator.py - (read from stdin)")
         print("\nOptions:")
-        print("  --session ID  Use specific session ID")
         print("  --reuse       Reuse existing session")
         sys.exit(1)
     
     # Parse arguments
     input_file = sys.argv[1]
-    session_id = None
     reuse = False
     
     i = 2
     while i < len(sys.argv):
-        if sys.argv[i] == '--session' and i + 1 < len(sys.argv):
-            session_id = sys.argv[i + 1]
-            i += 2
-        elif sys.argv[i] == '--reuse':
+        if sys.argv[i] == '--reuse':
             reuse = True
             i += 1
         else:
@@ -148,21 +132,18 @@ def main():
     if not words:
         print("Error: No words in input")
         sys.exit(1)
-    
-    if session_id is None:
-        session_id = f"wordcount-{uuid.uuid4().hex[:8]}"
-    
+        
     print(f"\n{'='*60}")
     print(f"STATEFUL WORDCOUNT MAPREDUCE")
     print(f"{'='*60}")
-    print(f"Session: {session_id}")
     print(f"Mode: {'ACCUMULATE' if reuse else 'NEW'}")
     print(f"Words: {len(words)}")
     
     try:
-        init_session(session_id, reuse=reuse)
-        results = process_words_parallel(words, session_id)
-        final = get_final_results(session_id)
+        if not reuse:
+            reset()
+        results = process_words_parallel(words)
+        final = get_final_results()
         
         # Display results
         print(f"\n{'='*60}")

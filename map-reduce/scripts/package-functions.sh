@@ -11,17 +11,7 @@ mkdir -p ../.fission-packages/map
 echo ""
 echo "Installing Yjs for state-manager..."
 cd ../.fission-packages/state-manager
-cat > package.json << EOF
-{
-  "name": "state-manager",
-  "version": "1.0.0",
-  "main": "index.js",
-  "dependencies": {
-    "express": "^4.18.2",
-    "y-webrtc": "^10.3.0",
-    "yjs": "github:deadlockcharlie/yjs#counter"
-}
-EOF
+cp ../../package.json package.json
 npm install 
 pwd
 echo 'copy state-manager.js'

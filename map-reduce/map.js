@@ -49,7 +49,6 @@ function sendUpdate(stateManagerUrl, data) {
 module.exports = async function(context) {
     const body = context.request.body;
     const text = body.text || '';
-    const sessionId = body.session_id || 'default';
     const stateManagerUrl = body.state_manager_url || process.env.STATE_MANAGER_URL;
     
     // Generate unique node ID for this mapper
@@ -72,7 +71,6 @@ module.exports = async function(context) {
             
             const updateResult = await sendUpdate(stateManagerUrl, {
                 operation: 'update',
-                session_id: sessionId,
                 word_counts: wordCounts,
                 node_id: nodeId,
                 timestamp: Date.now()

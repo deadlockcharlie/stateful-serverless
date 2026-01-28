@@ -1,18 +1,32 @@
-import WebSocket, { WebSocketServer } from 'ws';
+const WebSocket = require('ws');
 
-const wss = new WebSocketServer({port: 4040});
+const wss = new WebSocket.Server({port: 1234})
+
 const clients = new Set();
-const UpdatesRecieved  = new
+const updatesReceived = []; 
 
-wss.on('Connection', (ws) => {
-    clients.add(ws);
+wss.on("connection", (ws) => {           
+  clients.add(ws);
 
-    ws.on('message', (data, isBinary) => {
-        console.log('Update recieved')
-    })
+  if (updatesReceived.length > 0) {
+    ws.send(updatesReceived);
+  }
 
-    ws.on("close", () => {
-        clients.delete(ws);
-    })
+  ws.on("message", (raw) => {
+    let msg;
+    msg = JSON.parse(raw.toString());
+ 
+    update = [msg.word_count, Date.now(), msg.nodeId]
+    updatesReceived.push();
 
-})
+    for (const client of clients) {
+      if (client.readyState === client.OPEN) client.send(update); // send original payload
+    }
+  });
+
+  ws.on("close", () => {
+    clients.delete(ws);
+  });
+});
+
+console.log("WS server listening on 1234");

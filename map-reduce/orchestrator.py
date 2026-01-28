@@ -31,47 +31,20 @@ def make_request(url, data, timeout=30):
     except Exception as e:
         raise Exception(f"Request to {url} failed: {e}")
 
-def init_session(session_id, reuse=False):
-    """Initialize a new session or reuse existing one in the state manager"""
-    print(f"\n{'='*60}")
-    if reuse:
-        print(f"INITIALIZING OR REUSING SESSION: {session_id}")
-    else:
-        print(f"INITIALIZING STATE MANAGER SESSION: {session_id}")
-    print(f"{'='*60}")
-    
-    operation = 'get_or_create' if reuse else 'init'
-    
-    result = make_request(
-        f"{FISSION_ROUTER}/state-manager",
-        {
-            "operation": operation,
-            "session_id": session_id
-        }
-    )
-    
-    if reuse and result.get('is_new') == False:
-        print(f"  Reusing existing session")
-        print(f"    Current words: {result.get('unique_words', 0)} unique")
-        print(f"    Previous updates: {result.get('updates_count', 0)}")
-    else:
-        print(f"  New session created")
-    
-    return result
 
-def get_state(session_id):
+def get_state():
     """Get current state from state manager"""
     result = make_request(
         f"{FISSION_ROUTER}/state-manager",
         {
             "operation": "get",
-            "session_id": session_id
+            #"session_id": session_id
         }
     )
     
     return result
 
-def process_chunk(chunk_id, chunk, session_id):
+def process_chunk(chunk_id, chunk):
     """Process a single chunk - called in parallel"""
     state_manager_url = "http://router.fission/state-manager"
     
@@ -81,7 +54,7 @@ def process_chunk(chunk_id, chunk, session_id):
         f"{FISSION_ROUTER}/wordcount/map",
         {
             "text": chunk,
-            "session_id": session_id,
+            #"session_id": session_id,
             "state_manager_url": state_manager_url
         }
     )
@@ -93,8 +66,18 @@ def process_chunk(chunk_id, chunk, session_id):
         'result': result,
         'elapsed': elapsed
     }
+    
+def reset():
+    operation = 'reset'
+    
+    result = make_request(
+        f"{FISSION_ROUTER}/state-manager",
+        {
+            "operation": operation,
+        }
+    )
 
-def map_phase_parallel(text_chunks, session_id, max_workers=None):
+def map_phase_parallel(text_chunks, max_workers=None):
     """Execute map phase in parallel using ThreadPoolExecutor"""
     print(f"\n{'='*60}")
     print(f"PARALLEL MAP PHASE: Processing {len(text_chunks)} chunks")
@@ -108,7 +91,7 @@ def map_phase_parallel(text_chunks, session_id, max_workers=None):
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all chunk processing tasks
         future_to_chunk = { 
-            executor.submit(process_chunk, i, chunk, session_id): i 
+            executor.submit(process_chunk, i, chunk): i 
             for i, chunk in enumerate(text_chunks)
         }
         
@@ -139,13 +122,13 @@ def map_phase_parallel(text_chunks, session_id, max_workers=None):
     
     return results
 
-def get_final_results(session_id):
+def get_final_results():
     """Get final results from state manager"""
     print(f"\n{'='*60}")
     print(f"RETRIEVING FINAL STATE")
     print(f"{'='*60}")
     
-    return get_state(session_id)
+    return get_state()
 
 def split_text(text, num_chunks=3):
     """Split text into roughly equal chunks"""
@@ -165,31 +148,21 @@ def split_text(text, num_chunks=3):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python orchestrator.py <input_file> [num_chunks] [--session SESSION_ID] [--reuse] [--workers N]")
+        print("Usage: python orchestrator.py <input_file> [num_chunks] [--reuse] [--workers N]")
         print("   or: python orchestrator.py - (to read from stdin)")
         print("")
         print("Options:")
-        print("  --session SESSION_ID    Use specific session ID instead of generating one")
-        print("  --reuse                 Reuse existing session if it exists (accumulate counts)")
         print("  --workers N             Max parallel workers (default: auto based on chunks)")
         sys.exit(1)
     
     # Parse arguments
     input_file = sys.argv[1]
     num_chunks = 3
-    session_id = None
-    reuse = False
     max_workers = None
     
     i = 2
     while i < len(sys.argv):
-        if sys.argv[i] == '--session' and i + 1 < len(sys.argv):
-            session_id = sys.argv[i + 1]
-            i += 2
-        elif sys.argv[i] == '--reuse':
-            reuse = True
-            i += 1
-        elif sys.argv[i] == '--workers' and i + 1 < len(sys.argv):
+        if sys.argv[i] == '--workers' and i + 1 < len(sys.argv):
             max_workers = int(sys.argv[i + 1])
             i += 2
         elif sys.argv[i].isdigit():
@@ -210,46 +183,38 @@ def main():
             sys.exit(1)
     
     # Generate or use provided session ID
-    if session_id is None:
-        session_id = f"wordcount-{uuid.uuid4().hex[:8]}"
-    
+
     print(f"\n{'='*60}")
     print(f"STATEFUL WORDCOUNT MAPREDUCE")
     print(f"{'='*60}")
     print(f"Router: {FISSION_ROUTER}")
-    print(f"Session ID: {session_id}")
-    if reuse:
-        print(f"Mode: ACCUMULATE (adding to existing session)")
-    else:
-        print(f"Mode: NEW (fresh session)")
+
     print(f"Input: {len(text)} characters, {len(text.split())} words")
     print(f"Mappers: {num_chunks} (parallel)")
     print(f"Workers: {max_workers or 'auto'}")
     
     try:
-        # Initialize or reuse session in state manager
-        init_session(session_id, reuse=reuse)
+        reset()
         
         # Split and process in parallel
         text_chunks = split_text(text, num_chunks)
         
         # Run map phase with parallel execution
-        map_results = map_phase_parallel(text_chunks, session_id, max_workers=max_workers)
+        map_results = map_phase_parallel(text_chunks, max_workers=max_workers)
         
         print(f"Map results {map_results}")
         
         # Get final results from state manager
-        final = get_final_results(session_id)
+        final = get_final_results()
         
         # Display results
         print(f"\n{'='*60}")
         print("RESULTS FROM STATE MANAGER")
         print(f"{'='*60}")
-        print(f"Session: {final.get('session_id', session_id)}")
         print(f"Total words: {final.get('total_words', 0)}")
         print(f"Unique words: {final.get('unique_words', 0)}")
         print(f"Updates received: {final.get('updates_received', 0)}")
-        print(f"Session age: {final.get('session_age_seconds', 0)}s")
+        print(f"State Manager age: {final.get('age_seconds', 0)}s")
         
         results = final.get('word_count_results', [])
         
@@ -272,7 +237,7 @@ def main():
             }, f, indent=2)
         
         print(f"\n Full results saved to: wordcount_parallel_results.json")
-        print(f"\n State manager session '{session_id}' is still active.")
+        print(f"\n State manager is still active.")
         
     except Exception as e:
         print(f"\n Pipeline failed: {e}")

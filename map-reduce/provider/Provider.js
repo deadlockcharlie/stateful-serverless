@@ -20,7 +20,9 @@ wss.on("connection", (ws) => {
     updatesReceived.push();
 
     for (const client of clients) {
-      if (client.readyState === client.OPEN) client.send(update); // send original payload
+      if (client !== ws && client.readyState === client.OPEN) {
+        client.send(update); // send to all except sender
+      }
     }
   });
 

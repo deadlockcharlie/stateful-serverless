@@ -12,5 +12,5 @@ fi
 echo "Building provider-image..."
 docker build -t provider-image .
 
-echo "Running provider-image container..."
-docker run provider-image
+echo "Running provider-image container with port..."
+docker run -p 1234:1234 provider-image

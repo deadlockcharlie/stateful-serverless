@@ -1,6 +1,6 @@
 import * as Y from "./node_modules/yjs/src/index.js";
 import { YPNCounter as PNCounter } from "./node_modules/yjs/src/types/YPNCounter.js";
-import Websocket from 'wss'
+import Websocket from 'ws'
 
 // Persistent state for the process lifetime
 const ydoc = new Y.Doc();
@@ -11,8 +11,8 @@ const ws = new Websocket("ws://host.minikube.internal:1234")
 
 ws.onmessage = (event) =>{
     console.log('Recieved updates')
-    event.data.forEach(([wordounts, _, _]) => {
-        YdocTransaction(wordounts)
+    event.data.forEach(([wordcounts, _t, _id]) => {
+        YdocTransaction(wordcounts)
     });
 }
 
@@ -48,24 +48,24 @@ export default async function(context) {
             };
             
         case 'update':
-            const newCounts = body.word_counts || {};
+            const newCount = body.word_counts || {};
             const nodeId = body.node_id || 'unknown';
             const timestamp = body.timestamp || Date.now();
             
-            console.log(`[State Manager] Received update from ${nodeId}: ${Object.keys(newCounts).length} words`);
+            console.log(`[State Manager] Received update from ${nodeId}: ${Object.keys(newCount).length} words`);
             
             // Atomic updates using Yjs transactions
-            YdocTransaction(newCounts)
+            YdocTransaction(newCount)
             
             // Track local update history
             updates.push({
                 nodeId,
                 timestamp,
-                wordCount: Object.keys(newCounts).length
+                wordCount: Object.keys(newCount).length
             });
             
             ws.send({
-                newCounts,
+                newCount,
                 nodeId
             })
 

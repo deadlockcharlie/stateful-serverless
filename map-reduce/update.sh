@@ -12,7 +12,10 @@ echo ""
 echo "Updating state-manager function..."
 fission fn update --name state-manager \
   --deploy .fission-packages/state-manager.zip \
-  --entrypoint index
+  --entrypoint index \
+  --executortype newdeploy\
+  --minscale 1 \
+  --maxscale 1
 
 # Update wordcount-map
 echo ""

@@ -17,12 +17,14 @@ cat > package.json << EOF
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
-    "yjs": "^13.6.10"
+    "express": "^4.18.2",
+    "yjs": "github:deadlockcharlie/yjs#counter"
   }
 }
 EOF
 npm install
 cp ../../state-manager.js index.js
+cp ../../state-manager.mjs state-manager.mjs
 echo "Creating zip with node_modules..."
 zip -r ../state-manager.zip . -x "*.git*"
 cd ../..

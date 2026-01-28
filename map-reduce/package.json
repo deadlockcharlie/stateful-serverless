@@ -1,11 +1,10 @@
-
 {
   "name": "fission-wordcount-yjs",
   "version": "1.0.0",
   "description": "MapReduce word count with Yjs CRDT",
   "main": "index.js",
   "dependencies": {
-    "yjs": "^13.6.10",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "yjs": "github:deadlockcharlie/yjs#counter"
   }
 }

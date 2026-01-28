@@ -107,7 +107,7 @@ def map_phase_parallel(text_chunks, session_id, max_workers=None):
     # Use ThreadPoolExecutor for parallel execution
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all chunk processing tasks
-        future_to_chunk = {
+        future_to_chunk = { 
             executor.submit(process_chunk, i, chunk, session_id): i 
             for i, chunk in enumerate(text_chunks)
         }
@@ -236,6 +236,8 @@ def main():
         # Run map phase with parallel execution
         map_results = map_phase_parallel(text_chunks, session_id, max_workers=max_workers)
         
+        print(f"Map results {map_results}")
+        
         # Get final results from state manager
         final = get_final_results(session_id)
         
@@ -276,7 +278,7 @@ def main():
         print(f"\n Pipeline failed: {e}")
         print(f"\nMake sure all functions are deployed:")
         print(f"  - state-manager")
-        print(f"  - wordcount-stateful/map")
+        print(f"  - wordcount-map")
         sys.exit(1)
 
 if __name__ == "__main__":

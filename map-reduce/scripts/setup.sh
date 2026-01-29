@@ -24,6 +24,7 @@
     --deploy ../.fission-packages/state-manager.zip \
     --entrypoint index \
     --executortype newdeploy \
+    --maxscale 10
   # Seems uncessesary
   #fission fn update --name state-manager \ 
   #  --deploy .fission-packages/state-manager.zip \

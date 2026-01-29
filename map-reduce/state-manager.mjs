@@ -7,14 +7,33 @@ const ydoc = new Y.Doc();
 const ywordCounts = ydoc.getMap('word_counts');
 const updates = [];
 const created = Date.now();
-const ws = new Websocket("ws://host.minikube.internal:1234")
+const ws = new Websocket("ws://host.minikube.internal:1234");
+let pending = [];
 
-ws.onmessage = (event) =>{
-    console.log('Recieved updates')
-    event.data.forEach(([wordcounts, _t, _id]) => {
-        YdocTransaction(wordcounts)
-    });
-}
+ws.on('open', () => {console.log('Connected to websocket server')});
+
+ws.on('message', (data) => {
+    console.log('[State Manager] Recieved updates from provider')
+    let updates;
+    try {
+        updates = JSON.parse(data);
+    } catch (e) {
+        console.error('[State Manager] Failed to parse update:', data);
+        return;
+    }
+    if (Array.isArray(updates[0])) {
+        // If received an array of updates
+        updates.forEach(([wordcounts, _t, _id]) => {
+            YdocTransaction(wordcounts)
+        });
+    } else if (Array.isArray(updates)) {
+        // If received a single update as array
+        const [wordcounts, _t, _id] = updates;
+        YdocTransaction(wordcounts);
+    }
+})
+
+ws.on("error", (e) => { console.log(`Error from provider ${e}`)});
 
 function YdocTransaction(newCounts){
     ydoc.transact(() => {
@@ -29,6 +48,16 @@ function YdocTransaction(newCounts){
             counter.increment(count);
         });
     });
+}
+
+function send(msg) {
+  const payload = JSON.stringify(msg);
+  pending.push(payload);
+  if (ws.readyState === Websocket.OPEN) pending.forEach(data => {
+    console.log(`[State Manager] Sending updates to provider`)
+    ws.send(data)
+  });
+  console.log(`[State Manager] Provider not working update saved in pending`)
 }
 
 export default async function(context) {
@@ -64,15 +93,12 @@ export default async function(context) {
                 wordCount: Object.keys(newCount).length
             });
             
-            ws.send({
+            send({
                 newCount,
                 nodeId
             })
 
             const totalUniqueWords = ywordCounts.size;
-            ywordCounts.forEach((counter, word) => {
-                console.log(`${word}: ${counter.value}`)
-            });
             console.log(`[State Manager] Total unique words now: ${totalUniqueWords}`);
             
             return {

@@ -53,11 +53,13 @@ function YdocTransaction(newCounts){
 function send(msg) {
   const payload = JSON.stringify(msg);
   pending.push(payload);
-  if (ws.readyState === Websocket.OPEN) pending.forEach(data => {
-    console.log(`[State Manager] Sending updates to provider`)
-    ws.send(data)
-  });
-  console.log(`[State Manager] Provider not working update saved in pending`)
+  if (ws.readyState === Websocket.OPEN){ 
+    pending.forEach(data => {
+        console.log(`[State Manager] Sending updates to provider`)
+        ws.send(data)
+    });
+    pending = []
+  }else{console.log(`[State Manager] Provider not working update saved in pending`)}
 }
 
 export default async function(context) {

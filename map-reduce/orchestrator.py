@@ -7,7 +7,6 @@ import json
 import sys
 import os
 import time
-import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 FISSION_ROUTER = os.environ.get('FISSION_ROUTER', 'http://localhost:9090')
@@ -143,6 +142,7 @@ def main():
         if not reuse:
             reset()
         results = process_words_parallel(words)
+        time.sleep(60)
         final = get_final_results()
         
         # Display results

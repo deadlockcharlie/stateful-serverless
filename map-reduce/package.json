@@ -4,8 +4,11 @@
   "description": "Serverless Agents with CRDT state Management",
   "main": "index.js",
   "dependencies": {
+    "@y/websocket-server": "^0.1.1",
     "lib0": "^0.2.115-6",
     "ws": "^8.19.0",
+    "y-websocket-pncounter": "^1.0.1",
+    "y-websocket-server-pncounter": "^1.0.1",
     "yjs-ypcounter": "^1.0.0"
   }
 }

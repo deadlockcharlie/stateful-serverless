@@ -16,7 +16,7 @@ if [ ! -f "$input_file" ]; then
 fi
 
 echo "Starting y-websocket-server..."
-HOST=0.0.0.0 PORT=1234 node ./node_modules/y-websocket-server-pncounter/src/server.js > provider.log 2>&1 &
+HOST=0.0.0.0 PORT=1234 npx y-websocket > provider.log 2>&1 &
 provider_pid=$!
 
 # Function to clean up background processes

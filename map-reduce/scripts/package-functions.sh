@@ -9,10 +9,10 @@ mkdir -p ../.fission-packages/map
 
 # Install Yjs for state-manager
 echo ""
-echo "Installing Yjs for state-manager..."
+echo "Copying node_modules for state-manager..."
 cd ../.fission-packages/state-manager
 cp ../../package.json package.json
-npm install 
+cp -rL ../../node_modules . 
 pwd
 echo 'copy state-manager.js'
 cp ../../state-manager.js index.js

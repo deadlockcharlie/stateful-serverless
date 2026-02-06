@@ -10,9 +10,9 @@
 
   # Create with newer Node image
   fission env create --name nodejs-runtime \
-    --image fission/node-env-16:latest \
-    --builder fission/node-builder-16:latest \
-    --poolsize 10
+    --image ghcr.io/fission/node-env-22:latest \
+    --builder ghcr.io/fission/node-builder-22:latest \
+    --poolsize 12
 
   sleep 2
 
@@ -24,7 +24,8 @@
     --deploy ../.fission-packages/state-manager.zip \
     --entrypoint index \
     --executortype newdeploy \
-    --maxscale 10
+    --maxscale 10 \
+    --minscale 2
   # Seems uncessesary
   #fission fn update --name state-manager \ 
   #  --deploy .fission-packages/state-manager.zip \

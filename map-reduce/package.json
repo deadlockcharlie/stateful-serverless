@@ -4,9 +4,8 @@
   "description": "Serverless Agents with CRDT state Management",
   "main": "index.js",
   "dependencies": {
-    "crypto": "^1.0.1",
-    "express": "^4.18.2",
-    "wss": "^0.0.2",
-    "yjs": "github:deadlockcharlie/yjs#counter"
+    "lib0": "^0.2.115-6",
+    "ws": "^8.19.0",
+    "yjs-ypcounter": "^1.0.0"
   }
 }

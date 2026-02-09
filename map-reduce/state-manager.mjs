@@ -6,8 +6,8 @@ import WebSocketPolyfill from "ws";
 let ydoc = new Y.Doc();
 
 const provider = new WebsocketProvider(
-  "ws://host.minikube.internal:1234",
-  "GraceSyncKey",
+  "http://provider-service.default.svc.cluster.local:1234",
+  "Key",
   ydoc,
   { WebSocketPolyfill }
 );

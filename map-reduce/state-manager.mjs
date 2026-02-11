@@ -6,7 +6,8 @@ import WebSocketPolyfill from "ws";
 let ydoc = new Y.Doc();
 
 const provider = new WebsocketProvider(
-  "http://provider-service.default.svc.cluster.local:1234",
+  //"http://provider-service.default.svc.cluster.local:1234",
+  "ws://host.minikube.internal:1234",
   "Key",
   ydoc,
   { WebSocketPolyfill }
@@ -15,9 +16,27 @@ const provider = new WebsocketProvider(
 let ywordCounts = ydoc.getMap('word_counts');
 const updates = [];
 const created = Date.now();
+let totalWords = 0;
+
+// Promise that resolves when initial sync is complete
+let syncResolve;
+const syncPromise = new Promise((resolve) => {
+  syncResolve = resolve;
+  if (provider.synced) {
+    console.log("[y-websocket] Already synced on init");
+    resolve();
+  }
+});
 
 provider.on("status", (e) => {
   console.log("[y-websocket] status:", e.status); // "connecting" | "connected" | "disconnected"
+});
+
+provider.on("synced", (isSynced) => {
+  console.log("[y-websocket] synced:", isSynced);
+  if (isSynced && syncResolve) {
+    syncResolve();
+  }
 });
 
 //ydoc.on("update", (update, origin) => {
@@ -41,7 +60,7 @@ ywordCounts.observe((event, transaction) => {
     }
   });
   
-  console.log(`  Total unique words after change: ${ywordCounts.size}`);
+  console.log(`  Total unique: ${ywordCounts.size}, Total Word: ${totalWords}`);
 });
 
 function YdocTransaction(newCounts){
@@ -54,13 +73,25 @@ function YdocTransaction(newCounts){
             }
             const counter = ywordCounts.get(word);
             counter.increment(count);
+            totalWords += count;
         });
     });
 }
 
 export default async function(context) {
      const body = context.request.body;
-     const operation = body.operation; // 'init', 'update', 'get', 'merge', 'reset'  
+     const operation = body.operation; // 'init', 'update', 'get', 'merge', 'reset'
+     
+     // Wait for initial sync before processing to avoid creating duplicate counters
+     try {
+         await Promise.race([
+             syncPromise,
+             new Promise((_, reject) => setTimeout(() => reject(new Error('Sync timeout')), 5000))
+         ]);
+     } catch (e) {
+         console.log("[State Manager] Sync wait failed:", e.message, "- proceeding anyway");
+     }
+     
      switch(operation) {
          case 'reset':
              // Remove all keys from ywordCounts
@@ -87,7 +118,7 @@ export default async function(context) {
              });          
 
              const totalUniqueWords = ywordCounts.size;
-             console.log(`[State Manager] Total unique words now: ${totalUniqueWords}`);          
+             console.log(`[State Manager] Total unique: ${totalUniqueWords}, Total Word: ${totalWords}`);         
              return {
                  status: 200,
                  body: {
@@ -97,15 +128,16 @@ export default async function(context) {
                  }
              };          
          case 'get':
-             // Retrieve current state from Yjs map
+             // Retrieve current state from Yjs map and compute totals from CRDT
              const wordCounts = {};
+             let computedTotalWords = 0;
              ywordCounts.forEach((counter, word) => {
-                 wordCounts[word] = counter.value;
+                 const count = counter.value;
+                 wordCounts[word] = count;
+                 computedTotalWords += count;
              });
-             const sorted = Object.entries(wordCounts)
+            const sorted = Object.entries(wordCounts)
                  .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-             const total = Object.values(wordCounts)
-                 .reduce((sum, c) => sum + c, 0);
              //console.log(`final words: ${JSON.stringify(sorted)}`); // Debugging line
 
              return {
@@ -113,7 +145,7 @@ export default async function(context) {
                  body: {
                      word_counts: wordCounts,
                      word_count_results: sorted,
-                     total_words: total,
+                     total_words: computedTotalWords,
                      unique_words: sorted.length,
                      updates_received: updates.length,
                      age_seconds: Math.floor((Date.now() - created) / 1000)

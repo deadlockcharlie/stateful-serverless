@@ -16,7 +16,7 @@ spec:
       containers:
         - name: provider
           image: provider-image
-          imagePullPolicy: Never  # Use local image from Minikube's Docker
+          imagePullPolicy: IfNotPresent  # Use image built into Minikube nodes
           ports:
             - containerPort: 1234
           env:

@@ -12,7 +12,7 @@ echo ""
 echo "Copying node_modules for state-manager..."
 cd ../.fission-packages/state-manager
 cp ../../package.json package.json
-cp -rL ../../node_modules . 
+npm install 
 pwd
 echo 'copy state-manager.js'
 cp ../../state-manager.js index.js

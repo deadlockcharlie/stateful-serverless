@@ -6,8 +6,8 @@ import WebSocketPolyfill from "ws";
 let ydoc = new Y.Doc();
 
 const provider = new WebsocketProvider(
-  //"http://provider-service.default.svc.cluster.local:1234",
-  "ws://host.minikube.internal:1234",
+  "http://provider-service.default.svc.cluster.local:1234",
+  //"ws://host.minikube.internal:1234",
   "Key",
   ydoc,
   { WebSocketPolyfill }
@@ -17,6 +17,7 @@ let ywordCounts = ydoc.getMap('word_counts');
 const updates = [];
 const created = Date.now();
 let totalWords = 0;
+const clientId = Y.clientId
 
 // Promise that resolves when initial sync is complete
 let syncResolve;
@@ -67,11 +68,12 @@ function YdocTransaction(newCounts){
     ydoc.transact(() => {
         Object.entries(newCounts).forEach(([word, count]) => {
             // Get or create counter for this word (atomic)
-            if (!ywordCounts.has(word)) {
-                const counter = new Y.PNCounter();
-                ywordCounts.set(word, counter);
+            let counterKey = `${word}:${clientId}`
+            if (!ywordCounts.has(counterKey)) {
+                const counter = new Y.PNCounter(); // Generate Unique ID
+                ywordCounts.set(counterKey, counter);
             }
-            const counter = ywordCounts.get(word);
+            const counter = ywordCounts.get(counterKey);
             counter.increment(count);
             totalWords += count;
         });
@@ -131,11 +133,13 @@ export default async function(context) {
              // Retrieve current state from Yjs map and compute totals from CRDT
              const wordCounts = {};
              let computedTotalWords = 0;
-             ywordCounts.forEach((counter, word) => {
+             ywordCounts.forEach((counter, key) => {
                  const count = counter.value;
-                 wordCounts[word] = count;
+                 const word = key.split(':')[0]
+                 wordCounts[word] = (wordCounts[word] || 0) + count;
                  computedTotalWords += count;
              });
+
             const sorted = Object.entries(wordCounts)
                  .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
              //console.log(`final words: ${JSON.stringify(sorted)}`); // Debugging line

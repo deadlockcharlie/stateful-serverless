@@ -17,7 +17,7 @@ let ywordCounts = ydoc.getMap('word_counts');
 const updates = [];
 const created = Date.now();
 let totalWords = 0;
-const clientId = Y.clientId
+const clientId = ydoc.clientID;
 
 // Promise that resolves when initial sync is complete
 let syncResolve;

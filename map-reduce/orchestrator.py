@@ -8,6 +8,7 @@ import sys
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import subprocess
 
 FISSION_ROUTER = os.environ.get('FISSION_ROUTER', 'http://localhost:9090')
 print(f"Using FISSION_ROUTER: {FISSION_ROUTER}")
@@ -42,24 +43,32 @@ def reset():
     )
     return result
 
-def process_word(word_id, word):
+def process_word(word_id, word, max_retries=3, retry_delay=0.5):
     """Process a single word - called in parallel"""
     start_time = time.time()
-    
-    result = make_request(
-        f"{FISSION_ROUTER}/wordcount/map",
-        {
-            "text": word,
-            "state_manager_url": "http://router.fission/state-manager"
-        }
-    )
-    
-    return {
-        'word_id': word_id,
-        'word': word,
-        'result': result,
-        'elapsed': time.time() - start_time
-    }
+    last_error = None
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            result = make_request(
+                f"{FISSION_ROUTER}/wordcount/map",
+                {
+                    "text": word,
+                    "state_manager_url": "http://router.fission/state-manager"
+                }
+            )
+            return {
+                'word_id': word_id,
+                'word': word,
+                'result': result,
+                'elapsed': time.time() - start_time
+            }
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries:
+                time.sleep(retry_delay * attempt)
+
+    raise last_error
 
 def process_words_parallel(words):
     """Process all words in parallel"""
@@ -91,10 +100,6 @@ def process_words_parallel(words):
     print(f"{'='*60}")
     
     return results
-
-def get_final_results():
-    """Get final results from state manager"""
-    return get_state()
 
 def main():
     if len(sys.argv) < 2:
@@ -139,17 +144,31 @@ def main():
     print(f"Words: {len(words)}")
     
     try:
-        if not reuse:
-            reset()
+        
         results = process_words_parallel(words)
-        time.sleep(60)
-        final = get_final_results()
+        
+        # Allow CRDT sync time between state-manager pods
+        print("Waiting for CRDT sync...")
+        #time.sleep(5)
+        
+        start_wait = time.time()
+        final = get_state()
+        while final.get('total_words') != len(words):
+            current_total = final.get('total_words', 0)
+            print(f"Current total words: {current_total}/{len(words)}")
+            if time.time() - start_wait >= 60:
+                raise TimeoutError(
+                    f"Timed out after 60s waiting for total_words={len(words)}; last_total={current_total}"
+                )
+            time.sleep(1)  # Longer interval to give CRDT time to sync
+            final = get_state()
         
         # Display results
         print(f"\n{'='*60}")
         print("RESULTS")
         print(f"{'='*60}")
-        print(f"Total words: {final.get('total_words', 0)}")
+        actual_total = final.get('total_words', 0)
+        print(f"Total words: {actual_total} (expected: {len(words)}, diff: {len(words) - actual_total})")
         print(f"Unique words: {final.get('unique_words', 0)}")
         
         word_counts = final.get('word_count_results', [])
@@ -165,6 +184,7 @@ def main():
             json.dump({'final_state': final, 'word_results': results}, f, indent=2)
         
         print(f"\nResults saved to: wordcount_parallel_results.json")
+    
         
     except Exception as e:
         print(f"\nFailed: {e}")

@@ -28,52 +28,14 @@ def make_request(url, data, timeout=60):
     except Exception as e:
         raise Exception(f"Request to {url} failed: {e}")
 
-def init_session(session_id, reuse=False):
-    """Initialize a new session or reuse existing one in the state manager"""
-    print(f"\n{'='*60}")
-    if reuse:
-        print(f"INITIALIZING OR REUSING SESSION: {session_id}")
-    else:
-        print(f"INITIALIZING STATE MANAGER SESSION: {session_id}")
-    print(f"{'='*60}")
-    
-    operation = 'get_or_create' if reuse else 'init'
-    
-    result = make_request(
+def get_state():
+    """Get current state from state manager"""
+    return make_request(
         f"{FISSION_ROUTER}/state-manager",
-        {
-            "operation": operation,
-            "session_id": session_id
-        }
+        {"operation": "get"}
     )
-    
-    if reuse and result.get('is_new') == False:
-        print(f"  Reusing existing session")
-        print(f"    Current agents: {result.get('agent_count', 0)}")
-        print(f"    Previous updates: {result.get('updates_count', 0)}")
-    else:
-        print(f"  New session created")
-    
-    return result
 
-def get_agent_state(session_id, agent_id):
-    """Get agent state(s) from state manager"""
-    data = {
-        "operation": "get",
-        "session_id": session_id
-    }
-    
-    if agent_id:
-        data["agent_id"] = agent_id
-    
-    result = make_request(
-        f"{FISSION_ROUTER}/state-manager",
-        data
-    )
-    
-    return result
-
-def process_chunk(chunk_id, chunk, session_id):
+def process_chunk(chunk_id, chunk):
     """Process a single chunk using an agent - called in parallel"""
     
     state_manager_url = "http://router.fission.svc.cluster.local/state-manager"
@@ -86,7 +48,6 @@ def process_chunk(chunk_id, chunk, session_id):
         {
             "agent_id": agent_id,
             "chunk": chunk,
-            "session_id": session_id,
             "state_manager_url": state_manager_url
         }
     )
@@ -100,7 +61,7 @@ def process_chunk(chunk_id, chunk, session_id):
         'elapsed': elapsed
     }
 
-def execute_chunks_parallel(text_chunks, session_id, max_workers=None):
+def execute_chunks_parallel(text_chunks, max_workers=None):
     """Execute agent phase in parallel using ThreadPoolExecutor"""
     print(f"\n{'='*60}")
     print(f"PARALLEL MAP PHASE: Processing {len(text_chunks)} chunks")
@@ -118,8 +79,7 @@ def execute_chunks_parallel(text_chunks, session_id, max_workers=None):
             executor.submit(
                 process_chunk,
                 i,
-                chunk,
-                session_id
+                chunk
             ): i
             for i, chunk in enumerate(text_chunks)
         }
@@ -129,6 +89,7 @@ def execute_chunks_parallel(text_chunks, session_id, max_workers=None):
             chunk_id = future_to_chunk[future]
             try:
                 data = future.result()
+                print(data)
                 results.append(data)
                 
                 result = data['result']
@@ -151,13 +112,13 @@ def execute_chunks_parallel(text_chunks, session_id, max_workers=None):
     
     return results
 
-def get_final_state(session_id):
+def get_final_state():
     """Get final state from all agents"""
     print(f"\n{'='*60}")
     print(f"RETRIEVING FINAL STATE")
     print(f"{'='*60}")
     
-    return get_agent_state(session_id, None)
+    return get_state()
 
 def split_text(text, num_chunks=3):
     """Split text into roughly equal chunks"""
@@ -189,16 +150,12 @@ def main():
     # Parse arguments
     input_file = sys.argv[1]
     num_chunks = 3
-    session_id = None
     reuse = False
     max_workers = None
     
     i = 2
     while i < len(sys.argv):
-        if sys.argv[i] == '--session' and i + 1 < len(sys.argv):
-            session_id = sys.argv[i + 1]
-            i += 2
-        elif sys.argv[i] == '--reuse':
+        if sys.argv[i] == '--reuse':
             reuse = True
             i += 1
         elif sys.argv[i] == '--workers' and i + 1 < len(sys.argv):
@@ -221,15 +178,11 @@ def main():
             print(f"Error: File '{input_file}' not found")
             sys.exit(1)
     
-    # Generate or use provided session ID
-    if session_id is None:
-        session_id = f"wordcount-{uuid.uuid4().hex[:8]}"
     
     print(f"\n{'='*60}")
     print(f"STATEFUL AGENT WORDCOUNT")
     print(f"{'='*60}")
     print(f"Router: {FISSION_ROUTER}")
-    print(f"Session ID: {session_id}")
     if reuse:
         print(f"Mode: ACCUMULATE (adding to existing session)")
     else:
@@ -240,23 +193,21 @@ def main():
     
     try:
         # Initialize or reuse session in state manager
-        init_session(session_id, reuse=reuse)
         
         # Split text into chunks
         text_chunks = split_text(text, num_chunks)
         
         # Run agent phase with parallel execution
-        agent_results = execute_chunks_parallel(text_chunks, session_id, max_workers=max_workers)
+        agent_results = execute_chunks_parallel(text_chunks, max_workers=max_workers)
         
         print(f"\nAgent Results: {json.dumps(agent_results, indent=2)}")
         
-        final = get_final_state(session_id)
+        final = get_final_state()
         
         # Display results
         print(f"\n{'='*60}")
         print("RESULTS FROM STATE MANAGER")
         print(f"{'='*60}")
-        print(f"Session: {final.get('session_id', session_id)}")
         print(f"Total words: {final.get('total_words', 0)}")
         print(f"Unique words: {final.get('unique_words', 0)}")
         print(f"Updates received: {final.get('updates_received', 0)}")
@@ -281,7 +232,6 @@ def main():
             }, f, indent=2)
         
         print(f"\nFull results saved to: agent_parallel_results.json")
-        print(f"\nState manager session '{session_id}' is still active.")
         
     except Exception as e:
         print(f"\nPipeline failed: {e}")

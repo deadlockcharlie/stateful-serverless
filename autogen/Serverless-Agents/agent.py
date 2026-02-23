@@ -30,18 +30,25 @@ def main():
     agent_id = body.get("agent_id", "agent-0")
     chunk = body.get("chunk", "")
     state_manager_url = body.get("state_manager_url")
-    session_id = body.get("session_id", "default")
     
     # Run the async code
-    result = asyncio.run(process_chunk(agent_id, chunk, state_manager_url, session_id))
+    result = asyncio.run(process_chunk(agent_id, chunk, state_manager_url))
     # Return the body portion directly - Fission expects the response body
     return json.dumps(result.get("body", result))
 
-async def process_chunk(agent_id, chunk, state_manager_url, session_id):
+async def process_chunk(agent_id, chunk, state_manager_url):
     """Async processing logic"""
+    # Try environment variable first, then mounted secret file
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is not set")
+        try:
+            with open("/secrets/default/openai-api-key/OPENAI_API_KEY", "r") as f:
+                api_key = f.read().strip()
+        except FileNotFoundError:
+            pass
+    
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY not found in environment or mounted secret")
     MODEL_CLIENT = OpenAIChatCompletionClient(model="gpt-4o-2024-08-06", api_key=api_key)
     
     agent = AssistantAgent(
@@ -50,36 +57,51 @@ async def process_chunk(agent_id, chunk, state_manager_url, session_id):
         model_client=MODEL_CLIENT, 
     )
     
-    response = await agent.on_messages(
-        [TextMessage(content=f'Create a list of word : count, for all of the words that exist in this text, reply ONLY with the list of word:count and nothing else, for example if the text was "hello world" you reply with "hello": 2, "world": 1  {chunk}',
-                     source="user")], CancellationToken()
-    )
-    
-    response_text = response.chat_message.content
-    word_counts = parse_word_counts(response_text)
-    
-    if state_manager_url:
-        state_response = await send_result(word_counts, state_manager_url, session_id, agent_id)
-        state_updated = True
-    else:
-        state_updated = False
-        state_response = None
-        
-    await MODEL_CLIENT.close()
-    
-    return {
-        "status": 200,
-        "body": {
-            "response": response_text,
-            "word_counts": word_counts,
-            "state_updated": state_updated,
-            "session_id": session_id,
-            "state_manager_response": state_response
+    try:
+        response = await agent.on_messages(
+            [TextMessage(content=f'Create a list of word : count, for all of the words that exist in this text, reply ONLY with the list of word:count and nothing else, for example if the text was "hello world" you reply with "hello": 2, "world": 1  {chunk}',
+                         source="user")], CancellationToken()
+        )
+
+        response_text = response.chat_message.content
+        word_counts = parse_word_counts(response_text)
+        print(word_counts)
+
+        if state_manager_url:
+            state_response = await send_result(word_counts, state_manager_url, agent_id)
+            state_updated = True
+        else:
+            state_updated = False
+            state_response = None
+
+        await MODEL_CLIENT.close()
+
+        return {
+            "status": 200,
+            "body": {
+                "response": response_text,
+                "word_counts": word_counts,
+                "state_updated": state_updated,
+                "state_manager_response": state_response
+            }
         }
-    }
+    except Exception as e: 
+        error_message = str(e)
+        error_type = type(e).__name__
+        print(f"ERROR in agent {agent_id}: {error_type}: {error_message}")
+        import traceback
+        traceback.print_exc()
+        
+        return {
+            "status": 500,
+            "body": {
+                "error": error_message,
+                "error_type": error_type,
+                "agent_id": agent_id
+            }
+        }   
     
-    
-async def send_result(word_counts, state_manager_url, session_id, agent_id):
+async def send_result(word_counts, state_manager_url, agent_id):
     try:
         print(f"Sending results update to: {state_manager_url} for agent {agent_id}")
         print(f"Word counts: {word_counts}")
@@ -87,7 +109,6 @@ async def send_result(word_counts, state_manager_url, session_id, agent_id):
         data = {
             "operation": "update",
             "word_counts": word_counts,
-            "session_id": session_id,
             "node_id": agent_id,
             "timestamp": time.time()
         }

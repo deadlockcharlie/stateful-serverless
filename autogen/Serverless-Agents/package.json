@@ -1,10 +1,13 @@
 {
-  "name": "fission-wordcount-yjs",
+  "name": "fission-agent-serverless-yjs",
   "version": "1.0.0",
-  "description": "MapReduce word count with Yjs CRDT",
+  "description": "Serverless Agents with CRDT state Management",
   "main": "index.js",
   "dependencies": {
-    "express": "^4.18.2",
-    "yjs": "github:deadlockcharlie/yjs#counter"
+    "lib0": "^0.2.115-6",
+    "ws": "^8.19.0",
+    "y-websocket-pncounter": "^1.0.1",
+    "y-websocket-server-pncounter": "^1.0.2",
+    "yjs-ypcounter": "^1.0.0"
   }
 }

@@ -9,24 +9,21 @@ mkdir -p .fission-packages/agent
 
 # Install Yjs for state-manager
 echo ""
-echo "Installing Yjs for state-manager..."
-cd .fission-packages/state-manager
-cat > package.json << EOF
-{
-  "name": "state-manager",
-  "version": "1.0.0",
-  "main": "index.js",
-  "dependencies": {
-    "express": "^4.18.2",
-    "yjs": "github:deadlockcharlie/yjs#counter"
-  }
-}
-EOF
-npm install
+echo "Copying node_modules for state-manager..."
+cd ./.fission-packages/state-manager
+cp ../../package.json package.json
+npm install 
+pwd
+echo 'copy state-manager.js'
 cp ../../state-manager.js index.js
+pwd
+echo 'copy state-manager.mjs'
 cp ../../state-manager.mjs state-manager.mjs
+pwd
 echo "Creating zip with node_modules..."
+pwd
 zip -r ../state-manager.zip . -x "*.git*"
+pwd
 cd ../..
 
 echo "✓ state-manager.zip created ($(du -h .fission-packages/state-manager.zip | cut -f1))"

@@ -5,10 +5,7 @@ import re
 import time
 import httpx
 from flask import request
-from autogen_agentchat.agents import AssistantAgent
-from autogen_agentchat.messages import TextMessage
-from autogen_core import CancellationToken
-from autogen_ext.models.openai import OpenAIChatCompletionClient
+from autogen import AssistantAgent, UserProxyAgent
 
 def parse_word_counts(response_text):
     """Parse the LLM response into a word_counts dictionary"""
@@ -38,32 +35,47 @@ def main():
 
 async def process_chunk(agent_id, chunk, state_manager_url):
     """Async processing logic"""
-    # Try environment variable first, then mounted secret file
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        try:
-            with open("/secrets/default/openai-api-key/OPENAI_API_KEY", "r") as f:
-                api_key = f.read().strip()
-        except FileNotFoundError:
-            pass
+    # Ollama config for autogen
+    config_list = [
+        {
+            "model": "phi3:mini",
+            "base_url": "http://ollama:11434/v1",
+            "api_key": "ollama",  # dummy key for Ollama
+        }
+    ]
     
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY not found in environment or mounted secret")
-    MODEL_CLIENT = OpenAIChatCompletionClient(model="gpt-4o-2024-08-06", api_key=api_key)
+    user_proxy_agent = UserProxyAgent(
+        name="User",
+        human_input_mode="NEVER",
+        max_consecutive_auto_reply=0,
+        code_execution_config=False,
+    )
     
-    agent = AssistantAgent(
+    assistant_agent = AssistantAgent(
         name="assistant_agent",
-        system_message="You are a helpful assistant",
-        model_client=MODEL_CLIENT, 
+        system_message="You are a helpful assistant that counts words.",
+        llm_config={"config_list": config_list},
     )
     
     try:
-        response = await agent.on_messages(
-            [TextMessage(content=f'Create a list of word : count, for all of the words that exist in this text, reply ONLY with the list of word:count and nothing else, for example if the text was "hello world" you reply with "hello": 2, "world": 1  {chunk}',
-                         source="user")], CancellationToken()
+        message = f'Create a list of word : count, for all of the words that exist in this text, reply ONLY with the list of word:count and nothing else, for example if the text was "hello world" you reply with "hello": 1, "world": 1  {chunk}'
+        
+        chat_result = await user_proxy_agent.a_initiate_chat(
+            assistant_agent,
+            message=message,
+            max_turns=1,
         )
 
-        response_text = response.chat_message.content
+        # Get all messages from chat history
+        all_messages = []
+        if chat_result.chat_history:
+            for msg in chat_result.chat_history:
+                content = msg.get("content", "")
+                if content:
+                    all_messages.append(content)
+        
+        response_text = "\n".join(all_messages)
+        
         word_counts = parse_word_counts(response_text)
         print(word_counts)
 
@@ -73,8 +85,6 @@ async def process_chunk(agent_id, chunk, state_manager_url):
         else:
             state_updated = False
             state_response = None
-
-        await MODEL_CLIENT.close()
 
         return {
             "status": 200,

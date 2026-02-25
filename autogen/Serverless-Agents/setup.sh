@@ -3,16 +3,16 @@
 echo "Deploying Serverless AI Agent with persistent state manager..."
 
 # Check for OpenAI API key
-if [ -z "$OPENAI_API_KEY" ]; then
-  echo "ERROR: OPENAI_API_KEY environment variable is not set"
-  echo "Please run: export OPENAI_API_KEY='your-api-key'"
-  exit 1
-fi
+#if [ -z "$OPENAI_API_KEY" ]; then
+#  echo "ERROR: OPENAI_API_KEY environment variable is not set"
+#  echo "Please run: export OPENAI_API_KEY='your-api-key'"
+#  exit 1
+#fi
 
 # Create/update Kubernetes secret for OpenAI API key
-echo "Creating OpenAI API key secret..."
-kubectl delete secret openai-api-key 2>/dev/null || true
-kubectl create secret generic openai-api-key --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY"
+#echo "Creating OpenAI API key secret..."
+#kubectl delete secret openai-api-key 2>/dev/null || true
+#kubectl create secret generic openai-api-key --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY"
 
 # Package functions with dependencies
 echo ""
@@ -63,13 +63,11 @@ fission fn create --name agent \
   --env python-builder \
   --src .fission-packages/agent.zip \
   --entrypoint "main" \
-  --buildcmd "./build.sh" \
-  --secret openai-api-key 2>/dev/null || \
+  --buildcmd "./build.sh" 
 fission fn update --name agent \
   --src .fission-packages/agent.zip \
   --entrypoint "main" \
-  --buildcmd "./build.sh" \
-  --secret openai-api-key
+  --buildcmd "./build.sh" 
 
 fission route create --method POST \
   --url /agent \

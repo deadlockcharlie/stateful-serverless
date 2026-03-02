@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 FISSION_ROUTER = os.environ.get('FISSION_ROUTER', 'http://localhost:9090')
 print(f"Using FISSION_ROUTER: {FISSION_ROUTER}")
 
-def make_request(url, data, timeout=60):
+def make_request(url, data, timeout=600):
     """Make HTTP POST request"""
     json_data = json.dumps(data).encode('utf-8')
     req = urllib.request.Request(

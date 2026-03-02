@@ -58,7 +58,7 @@ async def process_chunk(agent_id, chunk, state_manager_url):
     )
     
     try:
-        message = f'Create a list of word : count, for all of the words that exist in this text, reply ONLY with the list of word:count and nothing else, for example if the text was "hello world" you reply with "hello": 1, "world": 1  {chunk}'
+        message = f'Create a list of word : count, for all of the words that exist in this text, reply ONLY with the list of word:count and nothing else, for example if the text was "hello world" you reply with "hello": 1, "world": 1, The text: {chunk}'
         
         chat_result = await user_proxy_agent.a_initiate_chat(
             assistant_agent,

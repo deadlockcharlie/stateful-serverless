@@ -33,10 +33,10 @@ echo "Packaging agent function with dependencies..."
 cd .fission-packages/agent
 cp ../../agent.py main.py
 cat > requirements.txt << EOF
-autogen-agentchat>=0.4.0
-autogen-ext[openai]>=0.4.0
-httpx>=0.27.0
-flask>=2.0.0
+autogen
+httpx
+flask
+ag2[openai]
 EOF
 cat > build.sh << EOF
 #!/bin/sh

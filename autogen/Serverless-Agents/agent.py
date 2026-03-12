@@ -5,7 +5,16 @@ import re
 import time
 import httpx
 from flask import request
+from typing import Dict
 from autogen import AssistantAgent, UserProxyAgent
+from autogen_core.tools import FunctionTool
+
+async def word_count(text: str) -> Dict[str, int]:
+    words = text.split()
+    for word in words:
+        word_count[word] = word_count.get(word, 0) + 1
+    
+    return word_count
 
 def parse_word_counts(response_text):
     """Parse the LLM response into a word_counts dictionary"""
@@ -35,30 +44,31 @@ def main():
 
 async def process_chunk(agent_id, chunk, state_manager_url):
     """Async processing logic"""
+    word_count_tool = FunctionTool(word_count, description="Return a dictionary of word:count")
     # Ollama config for autogen
     config_list = [
         {
-            "model": "phi3:mini",
+            "model": "qwen2.5",
             "base_url": "http://ollama:11434/v1",
             "api_key": "ollama",  # dummy key for Ollama
         }
     ]
-    
+        
     user_proxy_agent = UserProxyAgent(
         name="User",
         human_input_mode="NEVER",
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
+        max_consecutive_auto_reply=1,
     )
+    user_proxy_agent.register_for_execution(name="word_count")(word_count)
     
     assistant_agent = AssistantAgent(
         name="assistant_agent",
         system_message="You are a helpful assistant that counts words.",
-        llm_config={"config_list": config_list},
+        llm_config={"config_list": config_list, "tools": [word_count_tool.schema]},
     )
     
     try:
-        message = f'Create a list of word : count, for all of the words that exist in this text, reply ONLY with the list of word:count and nothing else, for example if the text was "hello world" you reply with "hello": 1, "world": 1, The text: {chunk}'
+        message = f'Run the word count for this text: {chunk}'
         
         chat_result = await user_proxy_agent.a_initiate_chat(
             assistant_agent,
@@ -75,8 +85,26 @@ async def process_chunk(agent_id, chunk, state_manager_url):
                     all_messages.append(content)
         
         response_text = "\n".join(all_messages)
-        
-        word_counts = parse_word_counts(response_text)
+    
+        word_counts = {}
+        if chat_result.chat_history:
+            for msg in chat_result.chat_history:
+                # Check for tool responses
+                if msg.get("role") == "tool" or "tool_responses" in msg:
+                    # Try to get the content which should be the tool return value
+                    content = msg.get("content", "")
+                    if isinstance(content, dict):
+                        word_counts = content
+                        break
+                    elif isinstance(content, str):
+                        try:
+                            word_counts = json.loads(content)
+                            break
+                        except:
+                            pass
+                        
+        #word_counts = parse_word_counts(response_text)
+        #word_counts = chat_result
         print(word_counts)
 
         if state_manager_url:

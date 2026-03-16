@@ -12,3 +12,7 @@ grafana:
   namespace: "monitoring"
   dashboards:
     enable: true
+storageService:
+  securityContext:
+    runAsUser: 0
+    fsGroup: 0

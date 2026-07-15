@@ -1,15 +1,7 @@
 import * as fs from 'node:fs/promises';
 
-interface AnalysisResult {
-    fullMap: Record<string, number>;
-    mainCharacter: {
-      char: string;
-      count: number;
-    };
-  }
-
-function countLetters(text: string): AnalysisResult {
-    const frequencyMap: Record<string, number> = {};
+function countLetters(text) {
+    const frequencyMap = {};
     let mainChar = "";
     let maxCount = 0;
 
@@ -55,7 +47,7 @@ async function main(){
         console.log(`\n Top-K is '${result.mainCharacter.char}' which appeared ${result.mainCharacter.count} times.`);
         console.log(`Total results:`, JSON.stringify(result.fullMap, null, 2));
     
-      } catch (error: any) {
+      } catch (error) {
         console.error("Something went wrong:", error.message);
       }
 }

@@ -16,6 +16,14 @@ fission env create --name nodejs-runtime \
 
 sleep 2
 
+# Delete previous state-manager to clear cached pods and force a fresh container
+echo ""
+echo "Cleaning up existing state-manager instance..."
+fission fn delete --name state-manager 2>/dev/null || true
+
+# Give Kubernetes a second to terminate the old pod
+sleep 1
+
 # 1. Deploy or Update state manager function with Yjs
 echo ""
 echo "1. Deploying state-manager (persistent CRDT store)..."

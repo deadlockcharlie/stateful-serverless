@@ -16,6 +16,15 @@ fission env create --name nodejs-runtime \
 
 sleep 2
 
+# 0. Deploy the Yjs WebSocket provider (persistent sync relay)
+echo ""
+echo "0. Deploying provider-service (Yjs websocket relay)..."
+kubectl apply -f provider-service/deployment.yaml
+kubectl apply -f provider-service/service.yaml
+
+echo "Waiting for provider-service to be ready..."
+kubectl rollout status deployment/provider-service --timeout=60s
+
 # Delete previous state-manager to clear cached pods and force a fresh container
 echo ""
 echo "Cleaning up existing state-manager instance..."

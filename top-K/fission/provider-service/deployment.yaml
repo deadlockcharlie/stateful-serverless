@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: provider-service
+  labels:
+    app: provider-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: provider-service
+  template:
+    metadata:
+      labels:
+        app: provider-service
+    spec:
+      containers:
+        - name: provider-service
+          image: node:22-alpine
+          command: ["sh", "-c", "npm install -g y-websocket-server-pncounter ws && y-websocket-server"]
+          ports:
+            - containerPort: 1234
+          env:
+            - name: PORT
+              value: "1234"
+            - name: HOST
+              value: "0.0.0.0"

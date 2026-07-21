@@ -12,7 +12,7 @@ module.exports = async function(context) {
           frequencyMap[character] = (frequencyMap[character] || 0) + 1; // the map with all characters
       }
   });
-  // Fire update to the State Manager
+  //update to the State Manager
   try {
     const response = await fetch(stateManagerUrl, {
       method: 'POST',

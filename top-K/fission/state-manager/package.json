@@ -1,0 +1,9 @@
+{
+    "name": "state-manager",
+    "version": "1.0.0",
+    "description": "Stateful CRDT Character Counter Manager",
+    "main": "index.js",
+    "dependencies": {
+      "yjs": "^13.6.20"
+    }
+  }

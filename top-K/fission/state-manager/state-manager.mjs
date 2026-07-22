@@ -89,6 +89,16 @@ export default async function(context) {
   }
 
   switch (operation) {
+    case 'reset':
+      yFrequencyMap.forEach((_, key) => {
+          yFrequencyMap.delete(key);
+      });
+      
+      return {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: { message: 'State reset' }
+      };      
     case 'update': {
       const newCounts = body.char_counts || {};
       const nodeId = body.node_id || 'unknown';

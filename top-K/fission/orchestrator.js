@@ -1,5 +1,29 @@
 import * as fs from 'node:fs/promises';
 
+const NUM_CHUNKS = Number(process.env.NUM_CHUNKS) || 3;
+function splitIntoChunks(text, numChunks) {
+  const chunkSize = Math.ceil(text.length / numChunks);
+  const chunks = [];
+  for (let i = 0; i < numChunks; i++) {
+    chunks.push(text.slice(i * chunkSize, (i + 1) * chunkSize));
+  }
+  return chunks;
+}
+
+async function reset(routerUrl){
+  const resetRes = await fetch(`${routerUrl}/state-manager`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation: 'reset' })
+  });
+
+  if (!resetRes.ok) {
+    console.error("Failed to reset state manager:", await resetRes.text());
+    return;
+  }
+  console.log("State reset complete.");
+}
+
 async function main() {
   const routerUrl = process.env.FISSION_ROUTER || 'http://localhost:9090';
   const internalFissionUrl = 'http://router.fission/state-manager';
@@ -7,34 +31,24 @@ async function main() {
   const text = await fs.readFile('./sample.txt', 'utf-8');
   console.log(`Read file of ${text.length} characters.`);
 
-  const chunkSize = Math.ceil(text.length / 3);
-  
-  const chunk1 = text.slice(0, chunkSize);
-  const chunk2 = text.slice(chunkSize, chunkSize * 2);
-  const chunk3 = text.slice(chunkSize * 2);
+  reset(routerUrl);
 
-  console.log(`Splitting into 3 chunks (~${chunkSize} chars each)...`);
-  console.log("Triggering 3 parallel Fission map containers...");
+  const chunks = splitIntoChunks(text, NUM_CHUNKS);
 
-  await Promise.all([
-    fetch(`${routerUrl}/lettercount/map`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: chunk1, stateManagerUrl: internalFissionUrl })
-    }),
-    fetch(`${routerUrl}/lettercount/map`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: chunk2, stateManagerUrl: internalFissionUrl })
-    }),
-    fetch(`${routerUrl}/lettercount/map`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: chunk3, stateManagerUrl: internalFissionUrl })
-    })
-  ]);
+  console.log(`Splitting into ${NUM_CHUNKS} chunks (~${chunks[0].length} chars each)...`);
+  console.log(`Triggering ${NUM_CHUNKS} parallel Fission map containers...`);
 
-  console.log("\nAll 3 mappers finished! Fetching merged state...");
+  await Promise.all(
+    chunks.map((chunk) =>
+      fetch(`${routerUrl}/lettercount/map`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: chunk, stateManagerUrl: internalFissionUrl })
+      })
+    )
+  );
+
+  console.log(`\nAll ${NUM_CHUNKS} mappers finished! Fetching merged state...`);
 
   const response = await fetch(`${routerUrl}/state-manager`, {
     method: 'POST',

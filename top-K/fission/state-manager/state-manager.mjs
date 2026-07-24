@@ -79,6 +79,7 @@ export default async function(context) {
   const operation = body.operation;
 
   // Wait for initial sync before processing to avoid creating duplicate counters
+  const syncWaitStart = performance.now();
   try {
     await Promise.race([
       syncPromise,
@@ -87,6 +88,7 @@ export default async function(context) {
   } catch (e) {
     console.log("[State Manager] Sync wait failed:", e.message, "- proceeding anyway");
   }
+  const syncWaitMs = Number((performance.now() - syncWaitStart).toFixed(2));
 
   switch (operation) {
     case 'reset':
@@ -100,19 +102,28 @@ export default async function(context) {
           body: { message: 'State reset' }
       };      
     case 'update': {
+      const t0 = performance.now();
       const newCounts = body.char_counts || {};
       const nodeId = body.node_id || 'unknown';
-
+    
       YdocTransaction(newCounts, nodeId);
-
+      const t1 = performance.now();
+    
+      console.log(`[State Manager] Received update from ${nodeId}: ${Object.keys(newCounts).length} unique characters`);
+    
       return {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: { message: 'State updated safely', current_total_characters: totalChars }
+        body: {
+          message: 'State updated safely',
+          current_total_characters: totalChars,
+          timing: { syncWaitMs, transactionMs: Number((t1 - t0).toFixed(2)) }
+        }
       };
     }
 
     case 'get': {
+      const tGetStart = performance.now();
       const combinedCounts = {};
 
       yFrequencyMap.forEach((counter, key) => {
@@ -134,7 +145,12 @@ export default async function(context) {
       return {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: { char_counts: combinedCounts, char_counts_sorted: sortedResults, winner }
+        body: {
+          char_counts: combinedCounts,
+          char_counts_sorted: sortedResults,
+          winner,
+          timing: { syncWaitMs, mergeMs: Number((performance.now() - tGetStart).toFixed(2)) }
+        }
       };
     }
 

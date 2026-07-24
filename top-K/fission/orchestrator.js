@@ -25,20 +25,27 @@ async function reset(routerUrl){
 }
 
 async function main() {
+  const tPipelineStart = performance.now();
   const routerUrl = process.env.FISSION_ROUTER || 'http://localhost:9090';
   const internalFissionUrl = 'http://router.fission/state-manager';
 
+  const tReadStart = performance.now();
   const text = await fs.readFile('./sample.txt', 'utf-8');
-  console.log(`Read file of ${text.length} characters.`);
+  const readMs = performance.now() - tReadStart;
+  console.log(`Read file of ${text.length} characters. (${readMs.toFixed(2)}ms)`);
 
-  reset(routerUrl);
+  await reset(routerUrl);
 
+  const tSplitStart = performance.now();
   const chunks = splitIntoChunks(text, NUM_CHUNKS);
+  const splitMs = performance.now() - tSplitStart;
 
   console.log(`Splitting into ${NUM_CHUNKS} chunks (~${chunks[0].length} chars each)...`);
   console.log(`Triggering ${NUM_CHUNKS} parallel Fission map containers...`);
 
-  await Promise.all(
+  const tDispatchStart = performance.now();
+
+  const mapResponses = await Promise.all(
     chunks.map((chunk) =>
       fetch(`${routerUrl}/lettercount/map`, {
         method: 'POST',
@@ -48,13 +55,28 @@ async function main() {
     )
   );
 
+  const dispatchWallMs = performance.now() - tDispatchStart;
+
+  const mapperTimings = await Promise.all(
+    mapResponses.map(async (r, i) => {
+      if (!r.ok) {
+        console.error(`Mapper ${i} failed with status ${r.status}`);
+        return null;
+      }
+      const body = await r.json();
+      return body.timing || null;
+    })
+  );
+
   console.log(`\nAll ${NUM_CHUNKS} mappers finished! Fetching merged state...`);
 
+  const tGetStart = performance.now();
   const response = await fetch(`${routerUrl}/state-manager`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ operation: 'get' })
   });
+  const getMs = performance.now() - tGetStart;
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -65,6 +87,24 @@ async function main() {
   const finalResults = await response.json();
   console.log("\n--- FISSION MERGED CRDT RESULTS ---");
   console.log(finalResults);
+
+  console.log("\n--- TIMING BREAKDOWN ---");
+  console.log(`Load (read file):              ${readMs.toFixed(2)}ms`);
+  console.log(`Split into chunks:             ${splitMs.toFixed(2)}ms`);
+  console.log(`Dispatch (parallel wall time): ${dispatchWallMs.toFixed(2)}ms`);
+  mapperTimings.forEach((t, i) => {
+    if (!t) {
+      console.log(`  [chunk ${i}] no timing data (failed)`);
+      return;
+    }
+    console.log(
+      `  [chunk ${i}] node=${t.nodeId} compute=${t.computeMs}ms update=${t.updateMs}ms total=${t.totalMs}ms`
+    );
+  });
+  console.log(`Final 'get' fetch:             ${getMs.toFixed(2)}ms`);
+
+  const totalPipelineMs = performance.now() - tPipelineStart;
+  console.log(`\nTOTAL TIME (start to finish): ${totalPipelineMs.toFixed(2)}ms`);
 }
 
 main();

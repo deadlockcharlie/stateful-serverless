@@ -1,6 +1,7 @@
 // stress-test-mock.js
 const N = Number(process.env.NUM_CHUNKS) || 100;
-const ROUTER = process.env.FISSION_ROUTER || 'http://localhost:9090';// adjust
+const CONCURRENCY = Number(process.env.CONCURRENCY) || 10; // Max active requests at once
+const ROUTER = process.env.FISSION_ROUTER || 'http://localhost:9090';
 
 async function fireOne(i) {
   const start = Date.now();
@@ -17,10 +18,28 @@ async function fireOne(i) {
   }
 }
 
+// Worker pool helper: keeps up to `limit` promises running at once
+async function mapConcurrent(items, limit, fn) {
+  const results = new Array(items.length);
+  let index = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (index < items.length) {
+      const i = index++;
+      results[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 (async () => {
-  console.log(`Firing ${N} parallel requests at mock mapper...`);
+  console.log(`Firing ${N} requests (${CONCURRENCY} concurrently) at mock mapper...`);
   const t0 = Date.now();
-  const results = await Promise.all(Array.from({ length: N }, (_, i) => fireOne(i)));
+  
+  // CHANGED: Use mapConcurrent instead of Promise.all
+  const tasks = Array.from({ length: N }, (_, i) => i);
+  const results = await mapConcurrent(tasks, CONCURRENCY, fireOne);
+  
   const wallMs = Date.now() - t0;
 
   const failed = results.filter(r => !r.ok);

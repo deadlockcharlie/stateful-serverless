@@ -9,8 +9,10 @@ module.exports = async function(context) {
 
   const characters = lowerCaseText.split(''); //array of the lower case caracters 
 
+  const isAlphanumeric = /[\p{L}]/u
+
   characters.forEach(character => {
-      if (character >= "a" && character <= "z"){
+      if (isAlphanumeric.test(character)){
           frequencyMap[character] = (frequencyMap[character] || 0) + 1; // the map with all characters
       }
   });

@@ -21,7 +21,7 @@ async function reset(routerUrl){
     console.error("Failed to reset state manager:", await resetRes.text());
     return;
   }
-  console.log("State reset complete.");
+  //console.log("State reset complete.");
 }
 
 async function main() {
@@ -30,11 +30,15 @@ async function main() {
   const internalFissionUrl = 'http://router.fission/state-manager';
 
   const tReadStart = performance.now();
-  const text = await fs.readFile('./sample.txt', 'utf-8');
+  const text = await fs.readFile('./arzwiki.txt', 'utf-8');
   const readMs = performance.now() - tReadStart;
   console.log(`Read file of ${text.length} characters. (${readMs.toFixed(2)}ms)`);
 
+  const tResetStart = performance.now();
   await reset(routerUrl);
+  const tReset = performance.now() - tResetStart;
+
+  console.log(`State reset complete in ${tReset.toFixed(2)}ms`);
 
   const tSplitStart = performance.now();
   const chunks = splitIntoChunks(text, NUM_CHUNKS);
@@ -86,9 +90,13 @@ async function main() {
 
   const finalResults = await response.json();
   console.log("\n--- FISSION MERGED CRDT RESULTS ---");
-  console.log(finalResults);
+  console.log({
+    winner: finalResults.winner,
+    timing: finalResults.timing
+  });
 
   console.log("\n--- TIMING BREAKDOWN ---");
+  console.log(`Reset state-manager:              ${tReset.toFixed(2)}ms`);
   console.log(`Load (read file):              ${readMs.toFixed(2)}ms`);
   console.log(`Split into chunks:             ${splitMs.toFixed(2)}ms`);
   console.log(`Dispatch (parallel wall time): ${dispatchWallMs.toFixed(2)}ms`);

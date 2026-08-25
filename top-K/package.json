@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "express": "^5.2.1",
+    "unbzip2-stream": "^1.4.3",
     "yjs": "^13.6.31",
     "yjs-ypcounter": "^1.0.0"
   },

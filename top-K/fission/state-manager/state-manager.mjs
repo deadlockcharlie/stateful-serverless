@@ -16,6 +16,8 @@ const provider = new WebsocketProvider(
 const yFrequencyMap = ydoc.getMap('frequencyMap');
 let totalChars = 0;
 const clientId = ydoc.clientID;
+const managerId = `mgr-${Math.random().toString(36).substr(2, 9)}`;
+console.log(`[State Manager] Instance started: ${managerId}`);
 
 // Promise that resolves when initial sync is complete
 let syncResolve;
@@ -91,16 +93,36 @@ export default async function(context) {
   const syncWaitMs = Number((performance.now() - syncWaitStart).toFixed(2));
 
   switch (operation) {
-    case 'reset':
-      yFrequencyMap.forEach((_, key) => {
-          yFrequencyMap.delete(key);
+    case 'reset': {
+      if (!provider.synced) {
+        try {
+          await Promise.race([
+            syncPromise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('sync timeout')), 65000))
+          ]);
+        } catch (e) {
+          return {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+            body: { error: 'Not synced, cannot guarantee reset', managerId }
+          };
+        }
+      }
+    
+      const keysToDelete = Array.from(yFrequencyMap.keys());   // snapshot first
+      ydoc.transact(() => {
+        keysToDelete.forEach((key) => yFrequencyMap.delete(key));
       });
-      
+      totalChars = 0;
+    
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    
       return {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-          body: { message: 'State reset' }
-      };      
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: { message: 'State reset', managerId, synced: provider.synced }
+      };
+    }   
     case 'update': {
       const t0 = performance.now();
       const newCounts = body.char_counts || {};
@@ -149,6 +171,11 @@ export default async function(context) {
           char_counts: combinedCounts,
           char_counts_sorted: sortedResults,
           winner,
+          connection: {
+            wsConnected: provider.wsconnected,
+            wsConnecting: provider.wsconnecting,
+            synced: provider.synced,
+          },
           timing: { syncWaitMs, mergeMs: Number((performance.now() - tGetStart).toFixed(2)) }
         }
       };
